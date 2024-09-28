@@ -152,8 +152,8 @@ impl SnowflakeDecode for bool {
     fn try_decode(value: &Option<String>, _: &SnowflakeColumnType) -> Result<Self> {
         let value = unwrap(value)?;
         match value.to_uppercase().as_str() {
-            "1" | "TRUE" => Ok(true),
-            "0" | "FALSE" => Ok(false),
+            "TRUE" | "T" | "YES" | "Y" | "ON" | "1" => Ok(true),
+            "FALSE" | "F" | "NO" | "N" | "OFF" | "0" => Ok(false),
             _ => Err(Error::Decode(format!("'{value}' is not bool"))),
         }
     }
