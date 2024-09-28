@@ -13,6 +13,8 @@ use crate::row::SnowflakeColumnType;
 use crate::SnowflakeSession;
 use crate::{chunk::download_chunk, Error, Result, SnowflakeRow};
 
+use futures::stream::{FuturesUnordered, StreamExt};
+
 pub(super) const SESSION_EXPIRED: &str = "390112";
 pub(super) const QUERY_IN_PROGRESS_ASYNC_CODE: &str = "333334";
 const DEFAULT_TIMEOUT_SECONDS: u64 = 300;
@@ -179,18 +181,15 @@ impl QueryExecutor {
             return Ok(vec![]);
         }
 
-        let mut handles = Vec::with_capacity(chunks.len());
-        while let Some(chunk) = chunks.pop() {
+        let mut futures = FuturesUnordered::new();
+        for chunk in chunks.drain(..) {
             let http = self.http.clone();
             let chunk_headers = self.chunk_headers.clone();
             let qrmk = self.qrmk.clone();
-            handles.push(tokio::spawn(async move {
-                download_chunk(http, chunk.url, chunk_headers, qrmk).await
-            }));
+            futures.push(async move { download_chunk(http, chunk.url, chunk_headers, qrmk).await });
         }
 
-        for fut in handles {
-            let result = fut.await?;
+        while let Some(result) = futures.next().await {
             rows.extend(result?.into_iter().map(|r| self.convert_row(r)));
         }
 
